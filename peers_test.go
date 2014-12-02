@@ -13,7 +13,7 @@ import (
 const (
 	trackerStopTimeOut   = time.Second * 1
 	trackerStartDuration = time.Millisecond * 5
-	trackerAddr          = ":8234"
+	trackerAddr          = ":0"
 )
 
 var (

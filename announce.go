@@ -28,6 +28,19 @@ type announceParams struct {
 	trackerID  string
 }
 
+type Values struct {
+	url.Values
+}
+
+func (v Values) GetBool(key string) (b bool, err error) {
+	val := v.Get(key)
+	if val == "" {
+		err = fmt.Errorf("Missing query parameter: %v", key)
+		return
+	}
+	return strconv.ParseBool(val)
+}
+
 func getBool(v url.Values, key string) (b bool, err error) {
 	val := v.Get(key)
 	if val == "" {
@@ -35,6 +48,19 @@ func getBool(v url.Values, key string) (b bool, err error) {
 		return
 	}
 	return strconv.ParseBool(val)
+}
+
+func (v Values) GetUint64(key string) (i uint64, err error) {
+	return getUint64(v.Values, key)
+}
+
+func (v Values) GetInt(key string) (i int, err error) {
+	val := v.Get(key)
+	if val == "" {
+		err = fmt.Errorf("Missing query parameter: %v", key)
+		return
+	}
+	return strconv.Atoi(val)
 }
 
 func getUint64(v url.Values, key string) (i uint64, err error) {
@@ -72,49 +98,48 @@ const (
 )
 
 func (a *announceParams) parse(u *url.URL) (err error) {
-	q := u.Query()
-
+	q := Values{u.Query()}
 	a.infoHash = q.Get(paramInfoHash)
 	if blank(a.infoHash) {
 		return fmt.Errorf("Missing info_hash")
 	}
 	a.ip = q.Get(paramIP)
 	a.peerID = q.Get(paramPeerID)
-	a.port, err = getUint(q, paramPort)
+	a.port, err = q.GetInt(paramPort)
 	if err != nil {
 		return
 	}
-	a.uploaded, err = getUint64(q, paramUploaded)
+	a.uploaded, err = q.GetUint64(paramUploaded)
 	if err != nil {
 		return
 	}
-	a.downloaded, err = getUint64(q, paramDownloaded)
+	a.downloaded, err = q.GetUint64(paramDownloaded)
 	if err != nil {
 		return
 	}
-	a.left, err = getUint64(q, paramLeft)
+	a.left, err = q.GetUint64(paramLeft)
 	if err != nil {
 		return
 	}
 	if !blank(q.Get(paramCompact)) {
-		a.compact, err = getBool(q, paramCompact)
+		a.compact, err = q.GetBool(paramCompact)
 		if err != nil {
 			return
 		}
 	}
 	if !blank(q.Get(paramNoPeerID)) {
-		a.noPeerID, err = getBool(q, paramNoPeerID)
+		a.noPeerID, err = q.GetBool(paramNoPeerID)
+		if err != nil {
+			return
+		}
+	}
+	if !blank(q.Get(paramNumberWant)) {
+		a.numWant, err = q.GetInt(paramNumberWant)
 		if err != nil {
 			return
 		}
 	}
 	a.event = q.Get(paramEvent)
-	if numWant := q.Get(paramNumberWant); !blank(numWant) {
-		a.numWant, err = strconv.Atoi(numWant)
-		if err != nil {
-			return
-		}
-	}
 	a.trackerID = q.Get(paramTrackerID)
 	return
 }
