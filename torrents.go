@@ -17,6 +17,13 @@ type trackerTorrent struct {
 	peers      trackerPeers
 }
 
+const (
+	paramComplete    = "complete"
+	paramIncomplete  = "incomplete"
+	paramPeers       = "peers"
+	defaultPeerCount = 50
+)
+
 func NewTrackerTorrents() trackerTorrents {
 	return make(trackerTorrents)
 }
@@ -50,13 +57,14 @@ func (t trackerTorrents) scrape(infoHashes []string) (files bmap) {
 }
 
 func (t trackerTorrents) register(infoHash, name string) (err error) {
-	log.Println("registering", infoHash, "as", name)
+	log.Printf("registering %#v with infoHash %v", name, infoHash)
 	if t2, ok := t[infoHash]; ok {
-		err = fmt.Errorf("Already have a torrent %#v with infoHash %v", t2.name, infoHash)
-		return
+		return fmt.Errorf("Already have a torrent %#v with infoHash %v", t2.name, infoHash)
 	}
+	// MEMORY_ALLOCATION
+	// TODO: use torrent pool
 	t[infoHash] = &trackerTorrent{name: name, peers: make(trackerPeers)}
-	return
+	return nil
 }
 
 func (t trackerTorrents) unregister(infoHash string) (err error) {
@@ -65,6 +73,7 @@ func (t trackerTorrents) unregister(infoHash string) (err error) {
 	return
 }
 
+// TODO: move to structure fields and refactor
 func (t *trackerTorrent) countPeers() (complete, incomplete int) {
 	for _, p := range t.peers {
 		if p.isComplete() {
@@ -77,32 +86,48 @@ func (t *trackerTorrent) countPeers() (complete, incomplete int) {
 }
 
 func (t *trackerTorrent) handleAnnounce(now time.Time, peerListenAddress *net.TCPAddr, params *announceParams, response bmap) (err error) {
-	peerKey := peerListenAddress.String()
-	var peer *trackerPeer
-	var ok bool
-	if peer, ok = t.peers[peerKey]; ok {
-		// Does the new peer match the old peer?
+	var (
+		// current peer
+		peer       *trackerPeer
+		peerExists bool
+		peerKey    = peerListenAddress.String()
+	)
+
+	// checking peer existance
+	if peer, peerExists = t.peers[peerKey]; peerExists {
+		// checking peer ID persistance
 		if peer.id != params.peerID {
 			log.Printf("Peer changed ID. %#v != %#v", peer.id, params.peerID)
-			delete(t.peers, peerKey)
+			// MEMORY_FREE
+			t.peers.Remove(peerKey)
 			peer = nil
 		}
 	}
+
 	if peer == nil {
+		// peer does not exist
+		// creating peer
+		// MEMORY_ALLOCATION
+		// TODO: use peers buffer
 		peer = &trackerPeer{
 			listenAddr: peerListenAddress,
 			id:         params.peerID,
 		}
-		t.peers[peerKey] = peer
-		log.Printf("Peer %s joined", peerKey)
+		t.peers.Add(peerKey, peer)
 	}
+
+	// updating params
+	// TODO: refactor into function
 	peer.lastSeen = now
 	peer.uploaded = params.uploaded
 	peer.downloaded = params.downloaded
 	peer.left = params.left
+
+	log.Printf("Peer %s Event %s", peerKey, params.event)
+	// processing event
 	switch params.event {
 	default:
-		// TODO(jackpal):maybe report this as a warning
+		// TODO: report this as a warning
 		log.Printf("Peer %s Unknown event %s", peerKey, params.event)
 	case "":
 	case "started":
@@ -118,36 +143,43 @@ func (t *trackerTorrent) handleAnnounce(now time.Time, peerListenAddress *net.TC
 		params.numWant = 0
 	}
 
-	completeCount, incompleteCount := t.countPeers()
-	response["complete"] = completeCount
-	response["incomplete"] = incompleteCount
+	// generating response
+	response[paramComplete], response[paramIncomplete] = t.countPeers()
 
+	// calculating peer count for response
+	// TODO: extract to function
 	peerCount := len(t.peers)
 	numWant := params.numWant
-	const DEFAULT_PEER_COUNT = 50
-	if numWant <= 0 || numWant > DEFAULT_PEER_COUNT {
-		numWant = DEFAULT_PEER_COUNT
+
+	if numWant <= 0 || numWant > defaultPeerCount {
+		// numWant incorrect
+		numWant = defaultPeerCount
 	}
 	if numWant > peerCount {
 		numWant = peerCount
 	}
 
+	// picking random peers from peerlist for current peer
 	peerKeys := t.peers.pickRandomPeers(peerKey, params.compact, numWant)
 	if params.compact {
 		var b bytes.Buffer
+		// MEMORY_ALLOCATION
+		// TODO: use bytes buffer pool
 		err = t.peers.writeCompactPeers(&b, peerKeys)
 		if err != nil {
 			return
 		}
-		response["peers"] = string(b.Bytes())
+		response[paramPeers] = string(b.Bytes())
 	} else {
 		var peers []bmap
+		// MEMORY_ALLOCATION
+		// TODO: use bmap pool
 		noPeerID := params.noPeerID
 		peers, err = t.peers.getPeers(peerKeys, noPeerID)
 		if err != nil {
 			return
 		}
-		response["peers"] = peers
+		response[paramPeers] = peers
 	}
 	return
 }

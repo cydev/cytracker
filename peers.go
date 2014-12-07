@@ -21,6 +21,16 @@ type trackerPeer struct {
 	left       uint64
 }
 
+func (t trackerPeers) Add(key string, peer *trackerPeer) {
+	log.Printf("Peer %s joined", key)
+	t[key] = peer
+}
+
+func (t trackerPeers) Remove(key string) {
+	log.Printf("Peer %s removed", key)
+	delete(t, key)
+}
+
 func (t trackerPeers) pickRandomPeers(peerKey string, compact bool, count int) (peers []string) {
 	// Cheesy approximation to picking randomly from all peers.
 	// Depends upon the implementation detail that map iteration is pseudoRandom
