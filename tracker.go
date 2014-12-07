@@ -87,11 +87,11 @@ func NewTracker() *Tracker {
 
 func (t *Tracker) ListenAndServe() (err error) {
 	t.done = make(chan struct{})
-	if t.ID == "" {
+	if blank(t.ID) {
 		t.ID = randomHexString(20)
 	}
 	addr := t.Addr
-	if addr == "" {
+	if blank(addr) {
 		addr = ":80"
 	}
 	var l net.Listener
@@ -104,12 +104,12 @@ func (t *Tracker) ListenAndServe() (err error) {
 	t.m.Unlock()
 	serveMux := http.NewServeMux()
 	announce := t.Announce
-	if announce == "" {
+	if blank(announce) {
 		announce = "/"
 	}
 	serveMux.HandleFunc(announce, t.handleAnnounce)
 	scrape := ScrapePattern(announce)
-	if scrape != "" {
+	if !blank(scrape) {
 		serveMux.HandleFunc(scrape, t.handleScrape)
 	}
 	go t.reaper()
