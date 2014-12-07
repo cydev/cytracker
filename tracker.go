@@ -15,6 +15,12 @@ import (
 	"github.com/jackpal/Taipei-Torrent/torrent"
 )
 
+const (
+	defaultAddr     = ":80"
+	defaultAnnounce = "/"
+	announcePath    = "/announce"
+)
+
 type Tracker struct {
 	Announce string
 	Addr     string
@@ -81,38 +87,53 @@ func listenSigInt() chan os.Signal {
 	return c
 }
 
+// NewTracker initializes new tracker structure and returns pointer to it
 func NewTracker() *Tracker {
-	return &Tracker{Announce: "/announce", torrents: NewTrackerTorrents()}
+	return &Tracker{Announce: announcePath, torrents: NewTrackerTorrents()}
 }
 
+// ListenAndServer starts to listen on specified port and blocking until end of operation
 func (t *Tracker) ListenAndServe() (err error) {
 	t.done = make(chan struct{})
+
 	if blank(t.ID) {
+		// generating tracker ID
 		t.ID = randomHexString(20)
 	}
+
+	// starting listening on specified addr
 	addr := t.Addr
 	if blank(addr) {
-		addr = ":80"
+		addr = defaultAddr
 	}
 	var l net.Listener
 	l, err = net.Listen("tcp", addr)
 	if err != nil {
 		return
 	}
+
+	// saving listener to tracker
 	t.m.Lock()
 	t.l = l
 	t.m.Unlock()
+
+	// creating new muxer
 	serveMux := http.NewServeMux()
 	announce := t.Announce
 	if blank(announce) {
-		announce = "/"
+		announce = defaultAnnounce
 	}
+
+	// setting handlers
 	serveMux.HandleFunc(announce, t.handleAnnounce)
 	scrape := ScrapePattern(announce)
 	if !blank(scrape) {
 		serveMux.HandleFunc(scrape, t.handleScrape)
 	}
+
+	// starting reaper cycle
 	go t.reaper()
+
 	// This statement will not return until there is an error or the t.l channel is closed
 	err = http.Serve(l, serveMux)
 	if err != nil {
@@ -127,6 +148,7 @@ func (t *Tracker) ListenAndServe() (err error) {
 	return
 }
 
+// Quit stops tracker operation
 func (t *Tracker) Quit() (err error) {
 	select {
 	case <-t.done:
@@ -134,11 +156,9 @@ func (t *Tracker) Quit() (err error) {
 		return
 	default:
 	}
-	var l net.Listener
 	t.m.Lock()
-	l = t.l
+	t.l.Close()
 	t.m.Unlock()
-	l.Close()
 	close(t.done)
 	return
 }

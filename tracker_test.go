@@ -19,22 +19,6 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-func TestScrapeURL(t *testing.T) {
-	Convey("Scrape URLs", t, func() {
-		tests := []struct{ announce, scrape string }{
-			{"", ""},
-			{"foo", ""},
-			{"x/announce", "x/scrape"},
-			{"x/announce?ad#3", "x/scrape?ad#3"},
-			{"announce/x", ""},
-		}
-		for _, test := range tests {
-			scrape := ScrapePattern(test.announce)
-			So(scrape, ShouldEqual, test.scrape)
-		}
-	})
-}
-
 func TestSwarm1(t *testing.T) {
 	Convey("Test Swarm x1", t, func() {
 		testSwarm(t, 1)
@@ -45,21 +29,17 @@ func TestSwarm10(t *testing.T) {
 	testSwarm(t, 10)
 }
 
-/* Larger sizes don't work correctly.
-
 func TestSwarm20(t *testing.T) {
 	testSwarm(t, 20)
 }
 
-func TestSwarm50(t *testing.T) {
-	testSwarm(t, 50)
-}
+// func TestSwarm50(t *testing.T) {
+// 	testSwarm(t, 50)
+// }
 
-func TestSwarm100(t *testing.T) {
-	testSwarm(t, 100)
-}
-
-*/
+// func TestSwarm100(t *testing.T) {
+// 	testSwarm(t, 100)
+// }
 
 func testSwarm(t *testing.T, leechCount int) {
 	err := runSwarm(leechCount)

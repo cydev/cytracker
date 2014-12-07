@@ -13,6 +13,7 @@ var (
 
 func main() {
 	log.Println("starting tracker on", *bindAddr)
+	flag.Parse()
 	if err := cytracker.StartTracker(*bindAddr, flag.Args()); err != nil {
 		log.Fatal(err)
 	}
